@@ -69,7 +69,31 @@ class StudentPerformanceApp:
         self.root.title("🎓 Student Performance Predictor")
         self.root.geometry("700x820")
         self.root.configure(bg=Theme.BG_PRIMARY)
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)  # allow window resizing
+
+        # Make UI scrollable via canvas + scrollbar
+        self.canvas = tk.Canvas(self.root, bg=Theme.BG_PRIMARY, highlightthickness=0)
+        self.v_scrollbar = tk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.v_scrollbar.set)
+
+        self.v_scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.scrollable_frame = tk.Frame(self.canvas, bg=Theme.BG_PRIMARY)
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        def _on_frame_configure(event):
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+        self.scrollable_frame.bind("<Configure>", _on_frame_configure)
+
+        def _on_canvas_configure(event):
+            self.canvas.itemconfig(self.canvas_window, width=event.width)
+
+        self.canvas.bind("<Configure>", _on_canvas_configure)
+
+        # Mouse wheel scroll support
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # Center the window on screen
         self.root.update_idletasks()
@@ -122,7 +146,7 @@ class StudentPerformanceApp:
 
     # ── Header ───────────────────────────────────────────────────────────
     def _build_header(self):
-        header_frame = tk.Frame(self.root, bg=Theme.BG_PRIMARY)
+        header_frame = tk.Frame(self.scrollable_frame, bg=Theme.BG_PRIMARY)
         header_frame.pack(fill="x", padx=30, pady=(30, 5))
 
         # Decorative accent line
@@ -161,7 +185,7 @@ class StudentPerformanceApp:
     # ── Input Section ────────────────────────────────────────────────────
     def _build_input_section(self):
         # Card container
-        card_outer = tk.Frame(self.root, bg=Theme.BORDER, padx=1, pady=1)
+        card_outer = tk.Frame(self.scrollable_frame, bg=Theme.BORDER, padx=1, pady=1)
         card_outer.pack(fill="x", padx=30, pady=(20, 0))
 
         card = tk.Frame(card_outer, bg=Theme.BG_CARD, padx=25, pady=20)
@@ -286,7 +310,7 @@ class StudentPerformanceApp:
 
     # ── Predict Button ───────────────────────────────────────────────────
     def _build_predict_button(self):
-        btn_frame = tk.Frame(self.root, bg=Theme.BG_PRIMARY)
+        btn_frame = tk.Frame(self.scrollable_frame, bg=Theme.BG_PRIMARY)
         btn_frame.pack(fill="x", padx=30, pady=20)
 
         self.predict_btn = tk.Button(
@@ -315,7 +339,7 @@ class StudentPerformanceApp:
     # ── Result Section ───────────────────────────────────────────────────
     def _build_result_section(self):
         # Card container
-        card_outer = tk.Frame(self.root, bg=Theme.BORDER, padx=1, pady=1)
+        card_outer = tk.Frame(self.scrollable_frame, bg=Theme.BORDER, padx=1, pady=1)
         card_outer.pack(fill="x", padx=30, pady=(0, 0))
 
         self.result_card = tk.Frame(card_outer, bg=Theme.BG_SECONDARY,
@@ -380,7 +404,7 @@ class StudentPerformanceApp:
 
     # ── Footer ───────────────────────────────────────────────────────────
     def _build_footer(self):
-        footer = tk.Frame(self.root, bg=Theme.BG_PRIMARY)
+        footer = tk.Frame(self.scrollable_frame, bg=Theme.BG_PRIMARY)
         footer.pack(fill="x", padx=30, pady=(15, 15))
 
         tk.Label(
@@ -397,9 +421,13 @@ class StudentPerformanceApp:
         g2 = self.g2_var.get()
 
         try:
-            # Model expects: [failures, G1, G2]
+            # Model expects: [failures, G1, G2] and was trained with feature names
             import numpy as np
-            features = np.array([[failures, g1, g2]])
+            import pandas as pd
+            features = pd.DataFrame(
+                [[failures, g1, g2]],
+                columns=["failures", "G1", "G2"]
+            )
             prediction = self.model.predict(features)[0]
 
             # Clamp prediction to 0-20 range
@@ -441,6 +469,13 @@ class StudentPerformanceApp:
             return "🟠 Below Average", "#ff7043"
         else:
             return "🔴 Needs Improvement", "#ff5252"
+
+    def _on_mousewheel(self, event):
+        # Cross-platform vertical scroll
+        if event.delta:
+            self.canvas.yview_scroll(-1 * int(event.delta / 120), "units")
+        else:
+            self.canvas.yview_scroll(1 if event.num == 5 else -1, "units")
 
 
 # ─── Entry Point ─────────────────────────────────────────────────────────────
